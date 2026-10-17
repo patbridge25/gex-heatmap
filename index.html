@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="zh">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>GEX 热力图</title>
+<title>GEX Heatmap</title>
 <style>
   :root {
     --bg: #f5f6f8;
@@ -54,7 +54,8 @@
   }
   button.primary { background: var(--spot); border-color: var(--spot); color: #fff; font-weight: 600; }
   input:focus-visible, button:focus-visible { outline: 2px solid var(--spot); outline-offset: 2px; }
-  .chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+  .chips { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+  .chips .row { display: flex; gap: 6px; flex-wrap: wrap; }
   .chips button { padding: 5px 12px; border-radius: 999px; font-size: 13px; }
   .stats { display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 10px; align-items: baseline; }
   .stats .sym { font-size: 18px; font-weight: 650; }
@@ -94,12 +95,12 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>GEX 热力图</h1>
-  <p class="sub">输入股票代码,查看每个行权价 × 到期日的 Gamma 敞口</p>
+  <h1>GEX Heatmap</h1>
+  <p class="sub">Enter a ticker</p>
 
   <form id="f">
-    <input id="q" type="text" placeholder="输入代码,例如 SPY、NBIS" autocomplete="off" autocapitalize="characters" aria-label="股票代码">
-    <button class="primary" type="submit">加载</button>
+    <input id="q" type="text" placeholder="Enter a ticker, e.g. SPY, NBIS" autocomplete="off" autocapitalize="characters" aria-label="Ticker symbol">
+    <button class="primary" type="submit">Load</button>
   </form>
   <div class="chips" id="chips"></div>
 
@@ -108,16 +109,16 @@
   <div class="tablebox"><table id="tbl"></table></div>
 
   <div class="legend">
-    <span>负 gamma</span><span class="bar"></span><span>正 gamma</span>
-    <span>· 黄框 = King(绝对值最大)</span>
-    <span>· 蓝线 = 现价</span>
+    <span>Negative gamma</span><span class="bar"></span><span>Positive gamma</span>
+    <span>· Yellow box = King (largest absolute value)</span>
+    <span>· Blue line = spot price</span>
   </div>
-  <p class="note">当前是模拟数据,用来预览界面。周末接上 CBOE 真实数据后,只需要替换 getData() 这一个函数。GEX 仅供参考,不构成投资建议。</p>
+  <p class="note">Mock data for previewing the interface. Once real CBOE data is connected, only the getData() function needs to be replaced. GEX is for reference only and is not financial advice.</p>
 </div>
 
 <script>
-/* ===== 数据层:周末只需要把这个函数换成 fetch('/api/gex?symbol=XXX') ===== */
-const SPOTS = { SPY: 763.52, QQQ: 710.16, IWM: 270.49, NBIS: 165.47, NVDA: 182.3, TSLA: 255.1, AAPL: 231.4 };
+/* ===== Data layer: swap getData() for fetch('/api/gex?symbol=XXX') once the backend is ready ===== */
+const SPOTS = { SPX: 7660.95, SPY: 763.52, QQQ: 710.16, IWM: 270.49, NBIS: 165.47, NVDA: 182.3, TSLA: 255.1, AAPL: 231.4 };
 
 function hash(s) { let h = 2166136261; for (const c of s) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; }
 function rng(seed) { return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
@@ -168,10 +169,10 @@ function render(d) {
 
   document.getElementById('stats').innerHTML =
     `<span class="sym">${d.symbol}</span>` +
-    `<span><span class="k">现价 </span><b>${d.spot.toFixed(2)}</b></span>` +
+    `<span><span class="k">Spot </span><b>${d.spot.toFixed(2)}</b></span>` +
     `<span><span class="k">King </span><b>${d.strikes[kr]}</b> <span class="k">(${d.exps[kc]})</span></span>`;
 
-  let h = '<thead><tr><th class="strike">行权价</th>' + d.exps.map(e => `<th>${e}</th>`).join('') + '</tr></thead><tbody>';
+  let h = '<thead><tr><th class="strike">Strike</th>' + d.exps.map(e => `<th>${e}</th>`).join('') + '</tr></thead><tbody>';
   d.strikes.forEach((k, i) => {
     const cls = [i === nearest ? 'nearest' : '', i === spotLineRow - 1 ? 'spotline' : ''].join(' ');
     h += `<tr class="${cls}"><td class="strike">${k}</td>`;
@@ -195,14 +196,19 @@ async function load(sym) {
   sym = sym.trim().toUpperCase();
   const err = document.getElementById('err');
   err.textContent = '';
-  if (!/^[A-Z.\-]{1,6}$/.test(sym)) { err.textContent = '代码格式不对,请输入 1–6 个字母,例如 SPY'; return; }
+  if (!/^[A-Z.\-]{1,6}$/.test(sym)) { err.textContent = 'Invalid ticker. Enter 1–6 letters, for example SPY.'; return; }
   document.getElementById('q').value = sym;
   try { render(await getData(sym)); }
-  catch (e) { err.textContent = '加载失败:' + e.message + '。检查网络后再试一次。'; }
+  catch (e) { err.textContent = 'Failed to load: ' + e.message + '. Check your connection and try again.'; }
 }
 
 document.getElementById('f').addEventListener('submit', e => { e.preventDefault(); load(document.getElementById('q').value); });
-document.getElementById('chips').innerHTML = ['SPY', 'QQQ', 'IWM', 'NBIS', 'NVDA'].map(s => `<button type="button" data-s="${s}">${s}</button>`).join('');
+const ROWS = [
+  ['SPX', 'SPY', 'QQQ', 'IWM'],
+  ['NBIS', 'NVDA', 'IREN', 'MSFT', 'TSLA', 'SPCX', 'INTC', 'UBER', 'USAR', 'HOOD', 'MSTR']
+];
+document.getElementById('chips').innerHTML = ROWS.map(r =>
+  '<div class="row">' + r.map(s => `<button type="button" data-s="${s}">${s}</button>`).join('') + '</div>').join('');
 document.getElementById('chips').addEventListener('click', e => { if (e.target.dataset.s) load(e.target.dataset.s); });
 load('NBIS');
 </script>
