@@ -2,37 +2,20 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="color-scheme" content="dark">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>GEX Heatmap</title>
 <style>
   :root {
-    --bg: #f5f6f8;
-    --surface: #ffffff;
-    --text: #14181f;
-    --muted: #6b7280;
-    --line: #e2e5ea;
-    --pos: 0, 160, 190;      /* cyan */
-    --neg: 190, 40, 200;     /* magenta */
-    --king: #f2b705;
-    --spot: #2563eb;
-    --cell-text: #14181f;
-    color-scheme: light;
+    --bg: #0b0e14;
+    --surface: #10141c;
+    --text: #e8ebf0;
+    --muted: #8b93a1;
+    --line: #1f2531;
+    --spot: #5b9dff;
+    color-scheme: dark;
   }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #0b0e14;
-      --surface: #10141c;
-      --text: #e8ebf0;
-      --muted: #8b93a1;
-      --line: #1f2531;
-      --pos: 40, 200, 230;
-      --neg: 200, 60, 220;
-      --king: #ffd23f;
-      --spot: #5b9dff;
-      --cell-text: #f2f4f8;
-      color-scheme: dark;
-    }
-  }
+  html { background: var(--bg); }
   * { box-sizing: border-box; }
   body {
     margin: 0; background: var(--bg); color: var(--text);
@@ -85,12 +68,15 @@
   td.strike { border-bottom: 1px solid var(--line); height: 28px; font-size: 13px; }
   tr.nearest td.strike { color: var(--spot); box-shadow: inset 3px 0 0 var(--spot); }
   tr.spotline td { border-bottom: 2px solid var(--spot); }
-  td.king { outline: 2px solid var(--king); outline-offset: -2px; position: relative; z-index: 1; font-weight: 700; }
+  td.king { font-weight: 700; }
   .legend { display: flex; align-items: center; gap: 10px; margin-top: 12px; color: var(--muted); font-size: 12px; flex-wrap: wrap; }
-  .bar { height: 10px; width: 180px; border-radius: 5px;
-    background: linear-gradient(90deg, rgba(var(--neg),.9), rgba(var(--neg),.0) 50%, rgba(var(--pos),.0) 50%, rgba(var(--pos),.9)); border: 1px solid var(--line); }
+  .bar { height: 10px; width: 200px; border-radius: 5px; border: 1px solid var(--line);
+    background: linear-gradient(90deg, #3c0e66, #561985 25%, #3d3d9a 50%, #3f58ae 58%, #38a19c 72%, #8fd05a 88%, #f3e45a); }
+  .keys { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 10px; color: var(--muted); font-size: 12px; }
+  .keys span { display: inline-flex; align-items: center; gap: 6px; }
+  .sw { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
   .note { margin-top: 12px; color: var(--muted); font-size: 12px; }
-  .err { color: #d33; margin: 8px 0; }
+  .err { color: #ff6b6b; margin: 8px 0; }
 </style>
 </head>
 <body>
@@ -110,8 +96,14 @@
 
   <div class="legend">
     <span>Negative gamma</span><span class="bar"></span><span>Positive gamma</span>
-    <span>· Yellow box = King (largest absolute value)</span>
-    <span>· Blue line = spot price</span>
+  </div>
+  <div class="keys">
+    <span><i class="sw" style="background:#f3e45a"></i>Yellow: strong positive gamma</span>
+    <span><i class="sw" style="background:#38a19c"></i>Green: mixed / neutral</span>
+    <span><i class="sw" style="background:#561985"></i>Purple: negative gamma</span>
+    <span><i class="sw" style="background:#3d3d9a"></i>Indigo: near zero</span>
+    <span>★ King node (largest absolute value)</span>
+    <span>Blue line: spot price</span>
   </div>
   <p class="note">Mock data for previewing the interface. Once real CBOE data is connected, only the getData() function needs to be replaced. GEX is for reference only and is not financial advice.</p>
 </div>
@@ -126,12 +118,12 @@ function rng(seed) { return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let
 function stepFor(p) { return p >= 1000 ? 5 : p >= 300 ? 1 : p >= 100 ? 2.5 : p >= 25 ? 1 : 0.5; }
 
 function expirations() {
-  const out = [], d = new Date(2026, 9, 16);
-  for (let i = 0; i < 8; i++) {
-    const x = new Date(d); x.setDate(d.getDate() + i * 7);
-    out.push(x.toISOString().slice(5, 10));
-  }
-  return out;
+  // weeklies, monthlies, quarterlies and LEAPS (mock list; real list comes from the data source)
+  return [
+    '2026-10-16', '2026-10-23', '2026-10-30', '2026-11-06', '2026-11-13', '2026-11-20',
+    '2026-11-27', '2026-12-04', '2026-12-18', '2027-01-15', '2027-02-19', '2027-03-19',
+    '2027-04-16', '2027-05-21', '2027-06-18', '2027-09-17', '2027-12-17', '2028-01-21'
+  ].map(d => { const [y, m, day] = d.split('-'); return `${+m}/${+day}/${y.slice(2)}`; });
 }
 
 async function getData(symbol) {
@@ -144,14 +136,34 @@ async function getData(symbol) {
   const exps = expirations();
   const scale = spot * spot * 0.01 * 100 * 40;
   const matrix = strikes.map(k => exps.map((_, j) => {
-    const dist = (k - spot) / (spot * 0.06);
-    const bell = Math.exp(-dist * dist) * (1.4 / (1 + j * 0.45)) + 0.06;
+    const dist = (k - spot) / (spot * 0.06 * (1 + j * 0.12));
+    const bell = Math.exp(-dist * dist) * (1.4 / (1 + j * 0.2)) + 0.06;
     const sign = rand() < 0.55 + (k > spot ? 0.1 : -0.15) ? 1 : -1;
     return sign * bell * rand() * scale * (0.3 + rand());
   }));
   return { symbol, spot, strikes, exps, matrix };
 }
 /* ======================================================================= */
+
+const POS = [[0,'#3d3d9a'],[0.15,'#3f58ae'],[0.4,'#38a19c'],[0.7,'#8fd05a'],[1,'#f3e45a']];
+const NEG = [[0,'#3d3d9a'],[0.3,'#4a2490'],[0.65,'#561985'],[1,'#3c0e66']];
+function hex(c) { return [1, 3, 5].map(i => parseInt(c.slice(i, i + 2), 16)); }
+function ramp(stops, t) {
+  for (let i = 1; i < stops.length; i++) {
+    if (t <= stops[i][0]) {
+      const [t0, c0] = stops[i - 1], [t1, c1] = stops[i], f = (t - t0) / (t1 - t0);
+      const a = hex(c0), b = hex(c1);
+      return a.map((x, k) => Math.round(x + (b[k] - x) * f));
+    }
+  }
+  return hex(stops[stops.length - 1][1]);
+}
+function cellColor(v, max) {
+  const t = Math.pow(Math.min(Math.abs(v) / max, 1), 0.8);
+  const [r, g, b] = ramp(v >= 0 ? POS : NEG, t);
+  const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return { bg: `rgb(${r},${g},${b})`, fg: lum > 0.55 ? '#10131a' : '#ffffff' };
+}
 
 function fmt(v) {
   const a = Math.abs(v), s = v < 0 ? '-' : '';
@@ -177,10 +189,9 @@ function render(d) {
     const cls = [i === nearest ? 'nearest' : '', i === spotLineRow - 1 ? 'spotline' : ''].join(' ');
     h += `<tr class="${cls}"><td class="strike">${k}</td>`;
     d.matrix[i].forEach((v, j) => {
-      const t = Math.pow(Math.min(Math.abs(v) / max, 1), 0.6);
-      const col = v >= 0 ? 'var(--pos)' : 'var(--neg)';
-      const alpha = (0.08 + t * 0.85).toFixed(3);
-      h += `<td class="cell${i === kr && j === kc ? ' king' : ''}" style="background:rgba(${col},${alpha})" title="${d.symbol} ${k} · ${d.exps[j]}: ${fmt(v)}">${fmt(v)}</td>`;
+      const isKing = i === kr && j === kc;
+      const c = cellColor(v, max);
+      h += `<td class="cell${isKing ? ' king' : ''}" style="background:${c.bg};color:${c.fg}" title="${d.symbol} ${k} · ${d.exps[j]}: ${fmt(v)}">${fmt(v)}${isKing ? ' ★' : ''}</td>`;
     });
     h += '</tr>';
   });
