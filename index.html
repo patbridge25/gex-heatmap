@@ -162,13 +162,19 @@ function rng(seed) { return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let
 
 function stepFor(p) { return p >= 1000 ? 5 : p >= 300 ? 1 : p >= 100 ? 2.5 : p >= 25 ? 1 : 0.5; }
 
-function expirations() {
-  // weeklies, monthlies, quarterlies and LEAPS (mock list; real list comes from the data source)
-  return [
-    '2026-10-16', '2026-10-23', '2026-10-30', '2026-11-06', '2026-11-13', '2026-11-20',
-    '2026-11-27', '2026-12-04', '2026-12-18', '2027-01-15', '2027-02-19', '2027-03-19',
-    '2027-04-16', '2027-05-21', '2027-06-18', '2027-09-17', '2027-12-17', '2028-01-21'
-  ].map(d => { const [y, m, day] = d.split('-'); return `${+m}/${+day}/${y.slice(2)}`; });
+const DAILY = ['SPX', 'SPY', 'QQQ', 'IWM'];  // these list an expiration every trading day
+
+function expirations(symbol) {
+  // mock list; the real list comes from the data source. 10/16 has already expired.
+  const dates = DAILY.includes(symbol)
+    ? ['2026-10-19', '2026-10-20', '2026-10-21', '2026-10-22', '2026-10-23',
+       '2026-10-26', '2026-10-27', '2026-10-28', '2026-10-29', '2026-10-30',
+       '2026-11-06', '2026-11-13', '2026-11-20', '2026-11-27', '2026-12-18',
+       '2027-01-15', '2027-03-19', '2027-06-18', '2027-09-17', '2027-12-17']
+    : ['2026-10-23', '2026-10-30', '2026-11-06', '2026-11-13', '2026-11-20',
+       '2026-11-27', '2026-12-04', '2026-12-18', '2027-01-15', '2027-02-19',
+       '2027-03-19', '2027-06-18', '2027-09-17', '2027-12-17', '2028-01-21'];
+  return dates.map(d => { const [y, m, day] = d.split('-'); return `${+m}/${+day}/${y.slice(2)}`; });
 }
 
 async function getData(symbol) {
@@ -178,7 +184,7 @@ async function getData(symbol) {
   const mid = Math.round(spot / step) * step;
   const strikes = [];
   for (let i = 24; i >= -24; i--) strikes.push(+(mid + i * step).toFixed(2));
-  const exps = expirations();
+  const exps = expirations(symbol);
   const scale = spot * spot * 0.01 * 100 * 40;
   const matrix = strikes.map(k => exps.map((_, j) => {
     const dist = (k - spot) / (spot * 0.06 * (1 + j * 0.12));
