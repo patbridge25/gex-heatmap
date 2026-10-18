@@ -150,49 +150,17 @@
     <span>★ King node (largest absolute value)</span>
     <span>Blue line: spot price</span>
   </div>
-  <p class="note">Mock data for previewing the interface. Once real CBOE data is connected, only the getData() function needs to be replaced. GEX is for reference only and is not financial advice.</p>
+  <p class="note">Source: Cboe delayed quotes (about 15 min delay); open interest is from the prior close. GEX is an estimate and is not financial advice.</p>
 </div>
 
 <script>
-/* ===== Data layer: swap getData() for fetch('/api/gex?symbol=XXX') once the backend is ready ===== */
-const SPOTS = { SPX: 7660.95, SPY: 763.52, QQQ: 710.16, IWM: 270.49, NBIS: 165.47, NVDA: 182.3, TSLA: 255.1, AAPL: 231.4 };
-
-function hash(s) { let h = 2166136261; for (const c of s) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; }
-function rng(seed) { return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
-
-function stepFor(p) { return p >= 1000 ? 5 : p >= 300 ? 1 : p >= 100 ? 2.5 : p >= 25 ? 1 : 0.5; }
-
-const DAILY = ['SPX', 'SPY', 'QQQ', 'IWM'];  // these list an expiration every trading day
-
-function expirations(symbol) {
-  // mock list; the real list comes from the data source. 10/16 has already expired.
-  const dates = DAILY.includes(symbol)
-    ? ['2026-10-19', '2026-10-20', '2026-10-21', '2026-10-22', '2026-10-23',
-       '2026-10-26', '2026-10-27', '2026-10-28', '2026-10-29', '2026-10-30',
-       '2026-11-06', '2026-11-13', '2026-11-20', '2026-11-27', '2026-12-18',
-       '2027-01-15', '2027-03-19', '2027-06-18', '2027-09-17', '2027-12-17']
-    : ['2026-10-23', '2026-10-30', '2026-11-06', '2026-11-13', '2026-11-20',
-       '2026-11-27', '2026-12-04', '2026-12-18', '2027-01-15', '2027-02-19',
-       '2027-03-19', '2027-06-18', '2027-09-17', '2027-12-17', '2028-01-21'];
-  return dates.map(d => { const [y, m, day] = d.split('-'); return `${+m}/${+day}/${y.slice(2)}`; });
-}
-
+/* ===== Data layer: real data from server.py (which runs calc_gex.py) ===== */
 async function getData(symbol) {
-  await new Promise(r => setTimeout(r, 150));
-  const spot = SPOTS[symbol] ?? (20 + (hash(symbol) % 40000) / 100);
-  const step = stepFor(spot), rand = rng(hash(symbol));
-  const mid = Math.round(spot / step) * step;
-  const strikes = [];
-  for (let i = 24; i >= -24; i--) strikes.push(+(mid + i * step).toFixed(2));
-  const exps = expirations(symbol);
-  const scale = spot * spot * 0.01 * 100 * 40;
-  const matrix = strikes.map(k => exps.map((_, j) => {
-    const dist = (k - spot) / (spot * 0.06 * (1 + j * 0.12));
-    const bell = Math.exp(-dist * dist) * (1.4 / (1 + j * 0.2)) + 0.06;
-    const sign = rand() < 0.55 + (k > spot ? 0.1 : -0.15) ? 1 : -1;
-    return sign * bell * rand() * scale * (0.3 + rand());
-  }));
-  return { symbol, spot, strikes, exps, matrix };
+  const r = await fetch('/api/gex?symbol=' + encodeURIComponent(symbol));
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
+  if (!j.strikes || !j.strikes.length) throw new Error('no data for ' + symbol);
+  return j;
 }
 /* ======================================================================= */
 
